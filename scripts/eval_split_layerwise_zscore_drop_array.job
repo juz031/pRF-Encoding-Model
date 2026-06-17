@@ -1,0 +1,38 @@
+#!/bin/bash
+#SBATCH --output=/home/junruz/prf_model/scripts/slurm_out/slurm-%A_%a.out
+#SBATCH -N 1
+#SBATCH --job-name=prf_model
+#SBATCH --time=10-00:00:00
+#SBATCH -p gpu
+#SBATCH --gres=gpu:1
+#SBATCH --nodelist=mind-0-28
+#SBATCH --mem=32G
+#SBATCH --cpus-per-gpu=8
+#SBATCH --array=0-9%2
+
+echo "SLURM_JOBID: " $SLURM_JOBID
+echo "SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID
+
+source activate env2025
+cd /home/junruz/prf_model/
+
+# LAYERS=(relu layer1 layer2 layer3 layer4)
+LAYERS=(stem stage1 stage2 stage3 stage4)
+MODEL_NAME=OPEN_CLIP_CONVNEXT_BASE
+SPLIT_IDS=(1 2)
+
+LAYER_ID=$((SLURM_ARRAY_TASK_ID % 5))
+SPLIT_INDEX=$((SLURM_ARRAY_TASK_ID / 5))
+
+LAYER_NAME=${LAYERS[$LAYER_ID]}
+SPLIT_ID=${SPLIT_IDS[$SPLIT_INDEX]}
+
+echo "Running layer: " ${LAYER_NAME}
+echo "Running split: " ${SPLIT_ID}
+
+python eval_prf_model_split_layerwise_zscore_drop.py \
+--model_name ${MODEL_NAME} \
+--layer_name ${LAYER_NAME} \
+--split_id ${SPLIT_ID} \
+--split_root /user_data/junruz/prf_models/split_1_zscore_drop \
+--model_path /user_data/junruz/prf_models/split_1_zscore_drop/S1

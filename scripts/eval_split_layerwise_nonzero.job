@@ -1,0 +1,23 @@
+#!/bin/bash
+#SBATCH --output=/home/junruz/prf_model/scripts/slurm_out/slurm-%j.out
+#SBATCH -N 1
+#SBATCH --job-name=prf_eval
+#SBATCH --time=10-00:00:00
+#SBATCH -p gpu
+#SBATCH --gres=gpu:1
+#SBATCH --nodelist=mind-1-15
+#SBATCH --mem=32G
+#SBATCH --cpus-per-gpu=8
+
+
+echo "SLURM_JOBID: " $SLURM_JOBID
+source activate env2025
+cd /home/junruz/prf_model/
+
+python eval_prf_model_split_layerwise_nonzero.py \
+--model_name DINO_RN50 \
+--layer_name layer3 \
+--split_id 2 \
+--split_root /user_data/junruz/prf_models/split_1 
+
+
