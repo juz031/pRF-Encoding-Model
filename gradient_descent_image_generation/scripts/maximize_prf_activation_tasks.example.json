@@ -1,0 +1,33 @@
+{
+  "defaults": {
+    "source_repo": "/home/hanfeig/MEI",
+    "model_name": "CLIP_RN50",
+    "layer_name": "layer1",
+    "best_prf_idx_path": "/user_data/hanfeig/prf_models/split_1/S1/CLIP_RN50_set1/layer1/best_prf_idx.npy",
+    "save_dir": "/user_data/hanfeig/prf_max_activation/split_1/S1/CLIP_RN50_set1/layer1",
+    "device": "cuda",
+    "steps": 500,
+    "lr": 0.05,
+    "num_restarts": 1,
+    "smooth_weight": 0.0001,
+    "l2_weight": 0.00001,
+    "jitter": 8
+  },
+  "tasks": [
+    {
+      "voxel_indices": [
+        0
+      ]
+    },
+    {
+      "voxel_indices": [
+        10
+      ]
+    },
+    {
+      "voxel_indices": [
+        25
+      ]
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+#!/bin/bash
+#SBATCH --job-name=adv_v1_mei
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-gpu=4
+#SBATCH --mem=8G
+#SBATCH --time=00:30:00
+#SBATCH --array=0-49%2
+#SBATCH --output=/home/hanfeig/gradient_descent_image_generation/slurm_out/adv-v1-%A_%a.out
+
+set -euo pipefail
+
+PROJECT_ROOT=/home/hanfeig/gradient_descent_image_generation
+SOURCE_REPO=/home/hanfeig/MEI
+PYTHON_BIN=${PYTHON_BIN:-/home/hanfeig/conda-envs/mei/bin/python}
+ADV_CHECKPOINT_PATH=${ADV_CHECKPOINT_PATH:-/user_data/hanfeig/prf_model_weights/ADV_RN50/imagenet_l2_3_0.pt}
+MANIFEST=${MANIFEST:-${PROJECT_ROOT}/scripts/adv_v1_top50_noise_ceiling.json}
+
+MODEL_NAME=ADV_RN50
+LAYER_NAME=${LAYER_NAME:-layer4}
+MODEL_DIR=/user_data/hanfeig/prf_models/split_1_zscore_drop/S1/ADV_RN50_set1/${LAYER_NAME}
+OUTPUT_ROOT=${OUTPUT_ROOT:-/user_data/hanfeig/prf_max_activation/split_1_zscore_drop/S1}
+OUTPUT_DIR=${OUTPUT_ROOT}/ADV_RN50_set1/${LAYER_NAME}/V1_top50_noise_ceiling
+
+DEVICE=${DEVICE:-cuda}
+STEPS=${STEPS:-100}
+LR=${LR:-0.05}
+NUM_RESTARTS=${NUM_RESTARTS:-1}
+TV_WEIGHT=${TV_WEIGHT:-0.0001}
+L2_WEIGHT=${L2_WEIGHT:-0.00001}
+JITTER=${JITTER:-8}
+RECORD_EVERY=${RECORD_EVERY:-5}
+SEED=${SEED:-0}
+SKIP_EXISTING=${SKIP_EXISTING:-1}
+
+TASK_ID=${SLURM_ARRAY_TASK_ID:-${TASK_ID:-0}}
+if (( TASK_ID < 0 || TASK_ID >= 50 )); then
+  echo "TASK_ID must be in [0, 49], got ${TASK_ID}." >&2
+  exit 2
+fi
+
+if [[ ! -x "${PYTHON_BIN}" ]]; then
+  echo "Python executable not found: ${PYTHON_BIN}" >&2
+  exit 2
+fi
+if [[ ! -d "${MODEL_DIR}" ]]; then
+  echo "Model directory not found: ${MODEL_DIR}" >&2
+  exit 2
+fi
+if [[ ! -f "${ADV_CHECKPOINT_PATH}" ]]; then
+  echo "ADV checkpoint not found: ${ADV_CHECKPOINT_PATH}" >&2
+  exit 2
+fi
+if [[ ! -f "${MANIFEST}" ]]; then
+  echo "Voxel manifest not found: ${MANIFEST}" >&2
+  exit 2
+fi
+
+"${PYTHON_BIN}" -c \
+  "import numpy, pandas, PIL, scipy, torch, torchvision"
+
+if [[ "${DEVICE}" == cuda* ]]; then
+  "${PYTHON_BIN}" -c \
+    "import torch; assert torch.cuda.is_available(), 'CUDA is unavailable in this job'"
+fi
+
+VOXEL_IDX=$(
+  "${PYTHON_BIN}" -c \
+    "import json, sys; print(json.load(open(sys.argv[1]))['voxel_indices'][int(sys.argv[2])])" \
+    "${MANIFEST}" "${TASK_ID}"
+)
+
+mkdir -p "${OUTPUT_DIR}"
+if (( TASK_ID == 0 )); then
+  cp "${MANIFEST}" "${OUTPUT_DIR}/selection_manifest.json"
+fi
+
+OUTPUT_PNG=${OUTPUT_DIR}/voxel_$(printf '%06d' "${VOXEL_IDX}")_maximize.png
+if [[ "${SKIP_EXISTING}" == 1 && -s "${OUTPUT_PNG}" ]]; then
+  echo "Output already exists; skipping: ${OUTPUT_PNG}"
+  exit 0
+fi
+
+export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK:-4}
+export MKL_NUM_THREADS=${SLURM_CPUS_PER_TASK:-4}
+export PYTHONDONTWRITEBYTECODE=1
+
+echo "job_id=${SLURM_JOB_ID:-interactive}"
+echo "array_task_id=${TASK_ID}"
+echo "voxel_idx=${VOXEL_IDX}"
+echo "model_dir=${MODEL_DIR}"
+echo "output_dir=${OUTPUT_DIR}"
+echo "device=${DEVICE}"
+echo "steps=${STEPS}"
+
+cd "${PROJECT_ROOT}"
+/usr/bin/time -f "elapsed=%e user=%U sys=%S maxrss_kb=%M" \
+  "${PYTHON_BIN}" maximize_prf_activation.py \
+    --source_repo "${SOURCE_REPO}" \
+    --model_name "${MODEL_NAME}" \
+    --layer_name "${LAYER_NAME}" \
+    --model_dir "${MODEL_DIR}" \
+    --adv_checkpoint_path "${ADV_CHECKPOINT_PATH}" \
+    --voxel_indices "${VOXEL_IDX}" \
+    --save_dir "${OUTPUT_DIR}" \
+    --device "${DEVICE}" \
+    --steps "${STEPS}" \
+    --lr "${LR}" \
+    --num_restarts "${NUM_RESTARTS}" \
+    --seed "${SEED}" \
+    --direction maximize \
+    --tv_weight "${TV_WEIGHT}" \
+    --l2_weight "${L2_WEIGHT}" \
+    --jitter "${JITTER}" \
+    --record_every "${RECORD_EVERY}"

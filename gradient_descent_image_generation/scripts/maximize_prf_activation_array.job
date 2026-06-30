@@ -1,0 +1,20 @@
+#!/bin/bash
+#SBATCH --output=/home/hanfeig/gradient_descent_image_generation/slurm_out/maxact-%A_%a.out
+#SBATCH -N 1
+#SBATCH --job-name=prf_maxact
+#SBATCH --time=01-00:00:00
+#SBATCH -p gpu
+#SBATCH --gres=gpu:1
+#SBATCH --mem=24G
+#SBATCH --cpus-per-gpu=4
+#SBATCH --array=0-2
+
+echo "SLURM_JOBID: " $SLURM_JOBID
+echo "SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID
+
+MEI_ROOT=/home/hanfeig/gradient_descent_image_generation
+PYTHON_BIN=/home/hanfeig/conda-envs/mei/bin/python
+cd ${MEI_ROOT}
+
+${PYTHON_BIN} maximize_prf_activation.py \
+  --task_config scripts/maximize_prf_activation_tasks.example.json
