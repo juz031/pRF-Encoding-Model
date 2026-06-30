@@ -187,7 +187,7 @@ def extract_intermediate_features_pRF(data_loader, prf_gaussians, args, num_imgs
         }
     
     elif model_name == "OPEN_CLIP_RN50":
-        model, _, preprocess = open_clip.create_model_and_transforms('RN50', pretrained='yfcc15m')
+        model, _, preprocess = open_clip.create_model_and_transforms('RN50', pretrained='yfcc15m', force_quick_gelu=True)
         CNN_backbone = model.visual
         del model.transformer
         torch.cuda.empty_cache()
@@ -297,8 +297,9 @@ def extract_intermediate_features_pRF(data_loader, prf_gaussians, args, num_imgs
     ##########################################################
     features_prf = []
     prf_gaussians = torch.from_numpy(prf_gaussians).to(device)
+    
     print(f"Extracting features for {num_imgs} images")
-    for step, img_data in tqdm(enumerate(data_loader)):
+    for step, img_data in enumerate(data_loader):
             img_data = img_data.to(device) # the 1st dim is zero here
             
             with torch.no_grad():
@@ -328,15 +329,16 @@ def create_prf_gaussian(args, which_prf_grid='default-log-polar'):
     return prf_gaussian
 
 
-def save_features_prf(features_prf, args, dtype=np.float32):
+def save_features_prf(features_prf, args, i, end_idx, dtype=np.float32):
     output_folder = os.path.join(args.save_root, f"S{args.subject_id[0]}")
     output_folder = os.path.join(output_folder, args.model_name)
     output_folder = os.path.join(output_folder, args.layer_name)
     os.makedirs(output_folder, exist_ok=True)
-    print(f"Saving features for {features_prf.shape[-1]} pRFs")
+    # print(f"Saving features for {features_prf.shape[-1]} pRFs")
+    print(f"Saving features for pRFs {i}-{end_idx-1}")
     features_prf = features_prf.astype(dtype)
-    for prf_idx in tqdm(range(features_prf.shape[-1])):
-        np.save(os.path.join(output_folder, f'features_prf_{prf_idx}.npy'), features_prf[:,:,prf_idx])
+    for prf_idx in range(0, end_idx-i):
+        np.save(os.path.join(output_folder, f'features_prf_{prf_idx+i}.npy'), features_prf[:,:,prf_idx])
 
 
 
@@ -358,6 +360,7 @@ def main():
     parser.add_argument('--model_name', type=str, default="OPEN_CLIP_CONVNEXT_BASE")
     parser.add_argument('--layer_name', type=str, default="stage4")
     parser.add_argument('--save_root', type=str, default="/user_data/junruz/prf_features")
+    parser.add_argument('--prf_per_time', type=int, default=200)
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -376,10 +379,15 @@ def main():
                                                 num_workers=0, \
                                                 drop_last=False)
     prf_gaussian = create_prf_gaussian(args, which_prf_grid='default-log-polar')
+    n_prfs = prf_gaussian.shape[-1]
     print(f"Using {args.layer_name} of {args.model_name}, pRF Gaussian mask shape: {prf_gaussian.shape}")
-    features_prf = extract_intermediate_features_pRF(neural_train_loader, prf_gaussian, args, num_images, device)
-    print(f"Features shape: {features_prf.shape}")
-    save_features_prf(features_prf, args)
+    for i in range(0, n_prfs, args.prf_per_time):
+        end_idx = min(i+args.prf_per_time, n_prfs)
+        print(f"Extracting features for pRFs {i}-{end_idx-1}", flush=True)
+        prf_gaussian_chunk = prf_gaussian[..., i:end_idx]
+        features_prf = extract_intermediate_features_pRF(neural_train_loader, prf_gaussian_chunk, args, num_images, device)
+        save_features_prf(features_prf, args, i, end_idx)
+    
 
 
 

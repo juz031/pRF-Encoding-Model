@@ -28,7 +28,7 @@ class LayerSize:
 setattr(LayerSize, "CLIP_RN50_layer_size", {
     'relu1': [32, 112, 112],
     'relu2': [32, 112, 112],
-    'relu3': [64, 112, 112],
+    'relu': [64, 112, 112],
     'avgpool': [64, 56, 56],
     'layer1': [256, 56, 56],
     'layer2': [512, 28, 28],
@@ -39,7 +39,7 @@ setattr(LayerSize, "CLIP_RN50_layer_size", {
 setattr(LayerSize, "OPEN_CLIP_RN50_layer_size", {
     'act1': [32, 112, 112],
     'act2': [32, 112, 112],
-    'act3': [64, 112, 112],
+    'relu': [64, 112, 112],
     'avgpool': [64, 56, 56],
     'layer1': [256, 56, 56],
     'layer2': [512, 28, 28],
@@ -65,14 +65,22 @@ setattr(LayerSize, "SIMCLR_RN50_layer_size", {
     'layer4': [2048, 7, 7]
 })
 
-setattr(LayerSize, "OPEN_CLIP_CONVNEXT_BASE_layer_size", {
-    'stem': [128, 56, 56], #1
-    'stage1': [128, 56, 56], #2
-    'stage2': [256, 28, 28], #2
-    'stage3': [512, 14, 14], #26
-    'stage4': [1024, 7, 7], #2
+setattr(LayerSize, "ADV_RN50_layer_size", {
+    'relu': [64, 112, 112],
+    'maxpool': [64, 56, 56],
+    'layer1': [256, 56, 56],
+    'layer2': [512, 28, 28],
+    'layer3': [1024, 14, 14],
+    'layer4': [2048, 7, 7]
 })
 
+setattr(LayerSize, "OPEN_CLIP_CONVNEXT_BASE_layer_size", {
+    'stem': [128, 56, 56],
+    'stage1': [128, 56, 56],
+    'stage2': [256, 28, 28],
+    'stage3': [512, 14, 14],
+    'stage4': [1024, 7, 7]
+})
 
 class Normalize:
     pass
@@ -80,14 +88,21 @@ class Normalize:
 setattr(Normalize, "CLIP_RN50_MEAN", np.array((0.48145466, 0.4578275, 0.40821073), dtype=np.single)[:, None, None])
 setattr(Normalize, "CLIP_RN50_STD", np.array((0.26862954, 0.26130258, 0.27577711), dtype=np.single)[:, None, None])
 
+setattr(Normalize, "OPEN_CLIP_RN50_MEAN", np.array((0.48145466, 0.4578275, 0.40821073), dtype=np.single)[:, None, None])
+setattr(Normalize, "OPEN_CLIP_RN50_STD", np.array((0.26862954, 0.26130258, 0.27577711), dtype=np.single)[:, None, None])
+
 setattr(Normalize, "DINO_RN50_MEAN", np.array((0.485, 0.456, 0.406), dtype=np.single)[:, None, None])
 setattr(Normalize, "DINO_RN50_STD", np.array((0.229, 0.224, 0.225), dtype=np.single)[:, None, None])
 
 setattr(Normalize, "SIMCLR_RN50_MEAN", np.array((0.485, 0.456, 0.406), dtype=np.single)[:, None, None])
 setattr(Normalize, "SIMCLR_RN50_STD", np.array((0.229, 0.224, 0.225), dtype=np.single)[:, None, None])
 
+setattr(Normalize, "ADV_RN50_MEAN", np.array((0.485, 0.456, 0.406), dtype=np.single)[:, None, None])
+setattr(Normalize, "ADV_RN50_STD", np.array((0.229, 0.224, 0.225), dtype=np.single)[:, None, None])
+
 setattr(Normalize, "OPEN_CLIP_CONVNEXT_BASE_MEAN", np.array((0.48145466, 0.4578275, 0.40821073), dtype=np.single)[:, None, None])
 setattr(Normalize, "OPEN_CLIP_CONVNEXT_BASE_STD", np.array((0.26862954, 0.26130258, 0.27577711), dtype=np.single)[:, None, None])
+
 
 def load_nsd_data(data_folder, labels_folder, ss):
     """
@@ -166,8 +181,8 @@ def model_fitting(voxel_data, train_ids, val_ids, nest_ids, features_folder, arg
     train_voxel = voxel_data[train_ids,:]
     nest_voxel = voxel_data[nest_ids,:]
 
-    train_voxel = torch.from_numpy(train_voxel).float().to(device)
-    nest_voxel = torch.from_numpy(nest_voxel).float().to(device)
+    train_voxel = torch.from_numpy(train_voxel).to(device)
+    nest_voxel = torch.from_numpy(nest_voxel).to(device)
 
     num_features = getattr(LayerSize, args.model_name + '_layer_size')[args.layer_name][0]
 
@@ -183,9 +198,12 @@ def model_fitting(voxel_data, train_ids, val_ids, nest_ids, features_folder, arg
     best_features_s_array = np.zeros((num_voxels, num_features))
     best_features_m_array = np.zeros((num_voxels, num_features))
     
-    for prf_idx in tqdm(range(num_prfs)): # ~1450
+    print(f"Fitting model for {num_prfs} PRFs", flush=True)
+    start_time = time.time()
+    for prf_idx in range(num_prfs): # ~1450
         features_path = os.path.join(features_folder, f'features_prf_{prf_idx}.npy')
         features = np.load(features_path)
+        features = features.astype(np.float64)
 
         # split train and nest features, then z-score the features across images axis 0 using model_fitting_utils.split_normalize_feats
         train_features, val_features, nest_features, features_s, features_m = model_fitting_utils.split_normalize_feats(features, train_ids, val_ids, nest_ids)
@@ -196,12 +214,12 @@ def model_fitting(voxel_data, train_ids, val_ids, nest_ids, features_folder, arg
         train_features = np.concatenate([train_features, np.ones(shape=(len(train_features), 1), dtype=train_features.dtype)], axis=1)
         nest_features = np.concatenate([nest_features, np.ones(shape=(len(nest_features), 1), dtype=nest_features.dtype)], axis=1)
 
-        train_features = torch.from_numpy(train_features).float().to(device)
-        nest_features = torch.from_numpy(nest_features).float().to(device)
+        train_features = torch.from_numpy(train_features).to(device)
+        nest_features = torch.from_numpy(nest_features).to(device)
         n_lambdas = 20
         small_value = 0.0001
         lambdas = np.logspace(np.log(small_value),np.log(10**10+small_value),n_lambdas, \
-                            dtype=np.float32, base=np.e) - small_value
+                            dtype=np.float64, base=np.e) - small_value
         
         best_weights, best_lambda_idx, best_nest_loss = model_fitting_utils.solve_ridge(train_features, train_voxel, nest_features, nest_voxel, lambdas, eps=1e-4, return_loss=True)
         # best_weights, best_lambda_idx, best_nest_loss = model_fitting_utils.solve_ridge_svd(train_features, train_voxel, nest_features, nest_voxel, lambdas, eps=1e-4, return_loss=True)
@@ -221,12 +239,13 @@ def model_fitting(voxel_data, train_ids, val_ids, nest_ids, features_folder, arg
                 count += 1
         # print(f"Number of voxels updated: {count}")
         
-
-    best_lambda_array = best_lambda_array.astype(np.float32)
-    best_nest_loss_array = best_nest_loss_array.astype(np.float32)
+    end_time = time.time()
+    print(f"Time taken: {end_time - start_time} seconds", flush=True)
+    best_lambda_array = best_lambda_array
+    best_nest_loss_array = best_nest_loss_array
     best_prf_idx_array = best_prf_idx_array.astype(int)
-    best_features_s_array = best_features_s_array.astype(np.float32)
-    best_features_m_array = best_features_m_array.astype(np.float32)
+    best_features_s_array = best_features_s_array
+    best_features_m_array = best_features_m_array
 
     return best_weights_dict, channel_kept_dict, best_lambda_array, best_nest_loss_array, best_prf_idx_array, best_features_s_array, best_features_m_array
 
@@ -257,7 +276,7 @@ def main():
     parser.add_argument('--model_name', type=str, default="DINO_RN50")
     parser.add_argument('--split_id', type=int, choices=[1,2], default=1)
     parser.add_argument('--layer_name', type=str, default="layer4")
-    parser.add_argument('--split_root', type=str, default="/user_data/junruz/prf_models/split_1_zscore")
+    parser.add_argument('--split_root', type=str, default="/user_data/junruz/prf_models/fixed/split_1_zscore")
     args = parser.parse_args()
 
     # where my preprocessed NSD files live
@@ -308,6 +327,7 @@ def main():
     np.save(os.path.join(save_fits_folder, "best_prf_idx.npy"), best_prf_idx)
     np.save(os.path.join(save_fits_folder, "best_features_s.npy"), best_features_s)
     np.save(os.path.join(save_fits_folder, "best_features_m.npy"), best_features_m)
+    print(f"Saved model fits to: {save_fits_folder}")
 
 
     pass

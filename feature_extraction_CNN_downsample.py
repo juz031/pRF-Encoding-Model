@@ -133,7 +133,7 @@ class nsd_img_loader(torch.utils.data.Dataset):
             data_set.close()
 
         # get images ready for feature extraction
-        image_array = values.astype(np.float32) / 255
+        image_array = values.astype(np.float32)
         self.image_array = image_array
         self.transform = normalize_image
 

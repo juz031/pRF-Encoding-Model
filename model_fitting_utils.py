@@ -15,6 +15,10 @@ def split_normalize_feats(f, trn_inds, val_inds, nest_inds):
     f_val = f[val_inds,:]
     f_nest = f[nest_inds,:]
 
+    # f_trn = f_trn.double()
+    # f_val = f_val.double()
+    # f_nest = f_nest.double()
+
     # I'm computing the normalization parameters (mean and std) on my training data only
     # (plus the nested held-out partition), but not the val set.
     # this helps reduce leakage of data between train and val partitions.
@@ -36,6 +40,36 @@ def split_normalize_feats(f, trn_inds, val_inds, nest_inds):
     
 
     return f_trn, f_val, f_nest, features_s, features_m
+
+def split_centering_feats(f, trn_inds, val_inds, nest_inds):
+
+    # In this step, we're going to z-score the features within each column. 
+    # This is helpful because the different features can have very different variances
+    # and normalizing these variances helps stabilize the resulting fits.
+
+    f_trn = f[trn_inds,:]
+    f_val = f[val_inds,:]
+    f_nest = f[nest_inds,:]
+
+    # I'm computing the normalization parameters (mean and std) on my training data only
+    # (plus the nested held-out partition), but not the val set.
+    # this helps reduce leakage of data between train and val partitions.
+    # then apply those same normalization parameters to the val set too.
+    f_concat = np.concatenate([f_trn, f_nest], axis=0)
+    # f_concat = f_trn
+    
+    features_m = np.mean(f_concat, axis=0, keepdims=True) #[:trn_size]
+    # print(features_m[0,0:10])
+    features_s = np.std(f_concat, axis=0, keepdims=True) + 1e-12
+    # features_s[features_s == 0] = 1
+    
+    f_trn -= features_m
+    f_nest -= features_m
+    f_val -= features_m
+    
+
+    return f_trn, f_val, f_nest, features_m
+
 
 def split_feats(f, trn_inds, val_inds, nest_inds):
     """
@@ -163,7 +197,7 @@ def solve_ridge_svd(xtrn, vtrn, xnest, vnest, lambdas, eps=1e-12, return_loss=Tr
     loss = torch.sum(torch.pow(vnest[:,None,:] - pred, 2), dim=0) # [#lambdas, #voxels]
     loss = loss.cpu().numpy()
     
-    weights_use = torch.zeros((n_features + 1, n_vox),device=device, dtype=torch.float64)
+    weights_use = torch.zeros((n_features + 1, n_vox),device=device, dtype=torch.float32)
     best_lambda_inds = np.zeros((n_vox,), dtype=np.float32)
     best_nest_loss = np.zeros((n_vox,), dtype=np.float32)
     
@@ -217,7 +251,7 @@ def solve_ridge(xtrn, vtrn, xnest, vnest, lambdas, eps=1e-12, return_loss=True):
 
         # first computing this matrix: (X^T X + λI)
         ridge_matrix = XtX + ridge_term * (l + eps)        
-        ridge_matrix = ridge_matrix.float()
+        ridge_matrix = ridge_matrix.double()
     
         # want to compute w.
         # express as:
@@ -239,7 +273,7 @@ def solve_ridge(xtrn, vtrn, xnest, vnest, lambdas, eps=1e-12, return_loss=True):
             
         weights_list.append(w)
 
-    weights = torch.stack(weights_list, dim=0).float()  # [#lambdas, #features, #voxels]
+    weights = torch.stack(weights_list, dim=0).double()  # [#lambdas, #features, #voxels]
 
     # print(XtX.shape, XtV.shape, xtrn.shape, vtrn.shape, ridge_matrix.shape)
     del XtX, XtV, xtrn, vtrn, ridge_matrix
@@ -260,8 +294,8 @@ def solve_ridge(xtrn, vtrn, xnest, vnest, lambdas, eps=1e-12, return_loss=True):
     loss = loss.cpu().numpy()
     
     weights_use = torch.zeros((n_features, n_vox),device=device, dtype=torch.float64)
-    best_lambda_inds = np.zeros((n_vox,), dtype=np.float32)
-    best_nest_loss = np.zeros((n_vox,), dtype=np.float32)
+    best_lambda_inds = np.zeros((n_vox,), dtype=np.float64)
+    best_nest_loss = np.zeros((n_vox,), dtype=np.float64)
     
     # for each voxel, find its best weights
     for vi in range(n_vox):
