@@ -18,9 +18,11 @@ figure/
 archived_code/
 debug/
 first_10_NSD_images/
+gradient_descent_image_generation/slurm_out/
 
 *.log
 slurm-*.out
+
 
 tmp/
 temp/

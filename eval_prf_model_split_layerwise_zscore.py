@@ -168,7 +168,7 @@ def eval_prf_model_layerwise(voxel_data, train_ids, val_ids, nest_ids, features_
     assert(num_voxels == best_prf_idx.shape[0])
 
     predicted_neural_list = []
-    for voxel_idx in tqdm(range(num_voxels)):
+    for voxel_idx in range(num_voxels):
     #     if voxel_idx in [619,  3716,  3909,  4450,  4451,  4464,  4494,  5101,  5544, \
     #     5921,  6349,  6399,  6757,  7357,  7364,  7450,  9967, 10451, \
     #    18831]:
@@ -222,7 +222,8 @@ def eval_prf_model_layerwise(voxel_data, train_ids, val_ids, nest_ids, features_
 
 def calculate_r2(predicted_neural, true_neural, roi_masks, noise_ceiling, args):
     model_path = os.path.join(args.model_path, args.model_name + f"_set{args.split_id}")
-    save_root = os.path.join(model_path, args.layer_name)
+    save_root = os.path.join(model_path, args.layer_name, "plots")
+    os.makedirs(save_root, exist_ok=True)
     # model_path = os.path.join(model_path, args.layer_name)
     noise_ceiling_threshold = args.noise_ceiling_threshold
     areas = args.roi

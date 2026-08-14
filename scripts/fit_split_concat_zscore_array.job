@@ -1,0 +1,34 @@
+#!/bin/bash
+#SBATCH --output=/home/junruz/prf_model/scripts/slurm_out/slurm-concat-%A_%a.out
+#SBATCH -N 1
+#SBATCH --job-name=fit_prf_concat
+#SBATCH --time=10-00:00:00
+#SBATCH -p gpu
+#SBATCH --gres=gpu:1
+#SBATCH --exclude=mind-0-18,mind-0-20,mind-0-22,mind-0-24,mind-0-26,mind-0-28,mind-1-11,mind-1-24
+#SBATCH --nodelist=mind-1-19
+#SBATCH --mem=32G
+#SBATCH --cpus-per-gpu=8
+#SBATCH --array=0-2%3
+
+echo "SLURM_JOBID: ${SLURM_JOBID}"
+echo "SLURM_ARRAY_TASK_ID: ${SLURM_ARRAY_TASK_ID}"
+echo "Running on node: ${SLURM_JOB_NODELIST}"
+echo "GPU Information:"
+nvidia-smi --query-gpu=name,memory.total --format=csv
+
+source activate env2025
+cd /home/junruz/prf_model/
+
+# Each array task fits one model. All available layers for that model are
+# concatenated by fit_prf_model_split_concat_zscore.py in architecture order.
+MODELS=(ADV_RN50 OPEN_CLIP_RN50 OPEN_CLIP_CONVNEXT_BASE)
+MODEL_NAME=${MODELS[$SLURM_ARRAY_TASK_ID]}
+
+echo "Running concatenated model: ${MODEL_NAME}"
+echo "Running split: 1"
+
+python fit_prf_model_split_concat_zscore.py \
+  --split_root /user_data/junruz/prf_models/concat/split_1_zscore \
+  --model_name "${MODEL_NAME}" \
+  --split_id 1

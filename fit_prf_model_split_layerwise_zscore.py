@@ -13,6 +13,14 @@ import pickle
 import os
 import numpy as np
 import open_clip
+from robustness.datasets import ImageNet
+from robustness.model_utils import make_and_restore_model
+
+import clip
+import open_clip
+from torchvision.models import resnet50
+from huggingface_hub import hf_hub_download
+
 
 
 # sys.path.insert(0,'/home/junruz/BrainDiVE')
@@ -26,10 +34,7 @@ class LayerSize:
     pass
 
 setattr(LayerSize, "CLIP_RN50_layer_size", {
-    'relu1': [32, 112, 112],
-    'relu2': [32, 112, 112],
     'relu': [64, 112, 112],
-    'avgpool': [64, 56, 56],
     'layer1': [256, 56, 56],
     'layer2': [512, 28, 28],
     'layer3': [1024, 14, 14],
@@ -37,10 +42,7 @@ setattr(LayerSize, "CLIP_RN50_layer_size", {
 })
 
 setattr(LayerSize, "OPEN_CLIP_RN50_layer_size", {
-    'act1': [32, 112, 112],
-    'act2': [32, 112, 112],
     'relu': [64, 112, 112],
-    'avgpool': [64, 56, 56],
     'layer1': [256, 56, 56],
     'layer2': [512, 28, 28],
     'layer3': [1024, 14, 14],
@@ -49,7 +51,6 @@ setattr(LayerSize, "OPEN_CLIP_RN50_layer_size", {
 
 setattr(LayerSize, "DINO_RN50_layer_size", {
     'relu': [64, 112, 112],
-    'maxpool': [64, 56, 56],
     'layer1': [256, 56, 56],
     'layer2': [512, 28, 28],
     'layer3': [1024, 14, 14],
@@ -58,7 +59,6 @@ setattr(LayerSize, "DINO_RN50_layer_size", {
 
 setattr(LayerSize, "SIMCLR_RN50_layer_size", {
     'relu': [64, 112, 112],
-    'maxpool': [64, 56, 56],
     'layer1': [256, 56, 56],
     'layer2': [512, 28, 28],
     'layer3': [1024, 14, 14],
@@ -67,7 +67,6 @@ setattr(LayerSize, "SIMCLR_RN50_layer_size", {
 
 setattr(LayerSize, "ADV_RN50_layer_size", {
     'relu': [64, 112, 112],
-    'maxpool': [64, 56, 56],
     'layer1': [256, 56, 56],
     'layer2': [512, 28, 28],
     'layer3': [1024, 14, 14],

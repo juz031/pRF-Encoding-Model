@@ -150,18 +150,7 @@ class nsd_img_loader(torch.utils.data.Dataset):
 
 
 
-# Extract intermediate features from a CNN model
-def extract_intermediate_features_pRF(data_loader, prf_gaussians, args, num_imgs, device):
-    """
-    # Input: 
-    # - data_loader: neural loader
-    # - prf_gaussian: all prf gaussian array
-
-    # Output:
-    # prf_features:array in shape of [n_images, n_channels, n_prfs] # TODO: save separately for each prf
-    # neural_rsp: array in shape of [n_images, n_neurons] # TODO: don't need to save this, use load_nsd_data function in fit_model_nsd_estimateprf.py to load this
-    """
-    
+def create_cnn_feature_extractor(args, device):
     ##########################################################
     # Load the CNN backbone
     ##########################################################
@@ -290,8 +279,16 @@ def extract_intermediate_features_pRF(data_loader, prf_gaussians, args, num_imgs
     feature_extractor.eval().to(device)
 
     print(f"Created {args.model_name} and moved to {device}, feature extractor created")
+    return feature_extractor
 
 
+def extract_intermediate_features_pRF(
+        data_loader, prf_gaussians, feature_extractor, args, num_imgs, device):
+    """
+    Extract pRF-weighted intermediate CNN features.
+
+    Returns an array with shape [n_images, n_channels, n_prfs].
+    """
     ##########################################################
     # Extract intermediate features
     ##########################################################
@@ -381,11 +378,19 @@ def main():
     prf_gaussian = create_prf_gaussian(args, which_prf_grid='default-log-polar')
     n_prfs = prf_gaussian.shape[-1]
     print(f"Using {args.layer_name} of {args.model_name}, pRF Gaussian mask shape: {prf_gaussian.shape}")
+    feature_extractor = create_cnn_feature_extractor(args, device)
     for i in range(0, n_prfs, args.prf_per_time):
         end_idx = min(i+args.prf_per_time, n_prfs)
         print(f"Extracting features for pRFs {i}-{end_idx-1}", flush=True)
         prf_gaussian_chunk = prf_gaussian[..., i:end_idx]
-        features_prf = extract_intermediate_features_pRF(neural_train_loader, prf_gaussian_chunk, args, num_images, device)
+        features_prf = extract_intermediate_features_pRF(
+            neural_train_loader,
+            prf_gaussian_chunk,
+            feature_extractor,
+            args,
+            num_images,
+            device,
+        )
         save_features_prf(features_prf, args, i, end_idx)
     
 

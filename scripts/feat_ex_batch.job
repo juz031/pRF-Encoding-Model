@@ -5,24 +5,29 @@
 #SBATCH --time=10-00:00:00
 #SBATCH -p gpu
 #SBATCH --gres=gpu:1
-#SBATCH --mem=64G
+#SBATCH --nodelist=mind-1-19
+#SBATCH --mem=16G
 #SBATCH --cpus-per-gpu=8
-#SBATCH --array=0-4%5
+#SBATCH --array=0-14%5
 
 echo "SLURM_JOBID: " $SLURM_JOBID
 echo "SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID
 
 echo "Running on node: " $SLURM_JOB_NODELIST
+echo "GPU Information:"
+nvidia-smi --query-gpu=name,memory.total --format=csv
 
 source activate env2025
 cd /home/junruz/prf_model/
 
-MODELS=(CLIP_RN50 OPEN_CLIP_RN50 DINO_RN50 ADV_RN50 SIMCLR_RN50)
-LAYERS=(layer2)
+MODELS=(OPEN_CLIP_RN50 DINO_RN50 ADV_RN50)
+LAYERS=(relu layer1 layer2 layer3 layer4)
+
+# MODELS=(OPEN_CLIP_CONVNEXT_BASE)
 # LAYERS=(stem stage1 stage2 stage3 stage4)
 
-MODEL_INDEX=$((SLURM_ARRAY_TASK_ID % 5))
-LAYER_ID=$((SLURM_ARRAY_TASK_ID / 5))
+MODEL_INDEX=$((SLURM_ARRAY_TASK_ID % 3))
+LAYER_ID=$((SLURM_ARRAY_TASK_ID / 3))
 
 MODEL_NAME=${MODELS[$MODEL_INDEX]}
 LAYER_NAME=${LAYERS[$LAYER_ID]}
@@ -31,6 +36,7 @@ echo "Running model: " ${MODEL_NAME}
 echo "Running layer: " ${LAYER_NAME}
 
 python feature_extraction_CNN_pRF_batch.py \
+--subject_id [7] \
 --batch_size 128 \
 --model_name ${MODEL_NAME} \
 --layer_name ${LAYER_NAME}

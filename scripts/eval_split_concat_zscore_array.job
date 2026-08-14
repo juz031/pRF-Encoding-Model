@@ -1,0 +1,40 @@
+#!/bin/bash
+#SBATCH --output=/home/junruz/prf_model/scripts/slurm_out/slurm-eval-concat-%A_%a.out
+#SBATCH -N 1
+#SBATCH --job-name=eval_prf_concat
+#SBATCH --time=10-00:00:00
+#SBATCH -p gpu
+#SBATCH --gres=gpu:1
+#SBATCH --nodelist=mind-1-19
+#SBATCH --mem=32G
+#SBATCH --cpus-per-gpu=8
+#SBATCH --array=0-7%8
+
+echo "SLURM_JOBID: ${SLURM_JOBID}"
+echo "SLURM_ARRAY_TASK_ID: ${SLURM_ARRAY_TASK_ID}"
+echo "Running on node: ${SLURM_JOB_NODELIST}"
+echo "GPU Information:"
+nvidia-smi --query-gpu=name,memory.total --format=csv
+
+source activate env2025
+cd /home/junruz/prf_model/
+
+# Each array task evaluates one model/split combination using all concatenated
+# layers. Tasks 0-2 use split 1, and tasks 3-5 use split 2.
+MODELS=(ADV_RN50 DINO_RN50 OPEN_CLIP_RN50 OPEN_CLIP_CONVNEXT_BASE)
+SPLIT_IDS=(1 2)
+
+MODEL_INDEX=$((SLURM_ARRAY_TASK_ID % ${#MODELS[@]}))
+SPLIT_INDEX=$((SLURM_ARRAY_TASK_ID / ${#MODELS[@]}))
+
+MODEL_NAME=${MODELS[$MODEL_INDEX]}
+SPLIT_ID=${SPLIT_IDS[$SPLIT_INDEX]}
+
+echo "Evaluating concatenated model: ${MODEL_NAME}"
+echo "Evaluating split: ${SPLIT_ID}"
+
+python eval_prf_model_split_concat_zscore.py \
+  --model_name "${MODEL_NAME}" \
+  --split_id "${SPLIT_ID}" \
+  --split_root /user_data/junruz/prf_models/concat/split_1_zscore \
+  --voxel_batch_size 1024
